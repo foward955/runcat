@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports)]
+#![windows_subsystem = "windows"]
 
 use std::sync::Arc;
 
