@@ -2492,6 +2492,7 @@ dependencies = [
 name = "runcat"
 version = "0.1.0"
 dependencies = [
+ "crossbeam-channel",
  "dark-light",
  "image",
  "once_cell",
