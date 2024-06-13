@@ -114,51 +114,6 @@ impl RunCatTray {
         }
     }
 
-    fn moditor_cpu_usage(&mut self) {
-        let mut sys = System::new();
-        let mut usage_cache = 1.0;
-        let (cpu_tx, cpu_rx) = crossbeam_channel::unbounded();
-
-        let mut i = 0;
-
-        // cpu stats calculation thread
-        tokio::task::spawn(async move {
-            loop {
-                std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
-                sys.refresh_cpu_usage();
-                let cpu_usage = sys.global_cpu_info().cpu_usage();
-
-                cpu_tx.send(cpu_usage).unwrap();
-            }
-        });
-
-        tokio::task::spawn(async move {
-            loop {
-                let cpu_usage = if let Ok(usage) = cpu_rx.try_recv() {
-                    usage_cache = usage;
-                    usage
-                } else {
-                    usage_cache
-                };
-
-                let cmp_f = [20.0, cpu_usage / 5.0];
-                let min = cmp_f.iter().fold(f32::NAN, |m, v| v.min(m));
-                let cmp_f = [1.0, min];
-                let max = cmp_f.iter().fold(f32::NAN, |m, v| v.max(m));
-                std::thread::sleep(std::time::Duration::from_millis((200.0 / max) as u64));
-                i += 1;
-
-                if i > MAX_CAT_INDEX {
-                    i = 0;
-                }
-
-                if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
-                    proxy.send_event(RunCatTrayEvent::TrayIconEvent(i)).unwrap();
-                }
-            }
-        });
-    }
-
     // fn add_menu_item(&mut self, item: MenuItem, handler: fn(e: MenuEvent)) {
     //     self.menu_items.push((item, handler));
     // }
@@ -174,6 +129,56 @@ impl RunCatTray {
             };
             tray_icon.set_icon(Some(icon)).unwrap();
         }
+    }
+}
+
+fn send_cpu_usage(sys: &mut System, cpu_tx: &Sender<f32>) {
+    loop {
+        std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+        sys.refresh_cpu_usage();
+        let cpu_usage = sys.global_cpu_info().cpu_usage();
+
+        cpu_tx.send(cpu_usage).unwrap();
+    }
+}
+
+fn modify_tray_icon(cpu_rx: &Receiver<f32>) {
+    let mut i = 0;
+    let mut usage_cache = 1.0;
+
+    loop {
+        let cpu_usage = if let Ok(usage) = cpu_rx.try_recv() {
+            usage_cache = usage;
+            usage
+        } else {
+            usage_cache
+        };
+
+        let cmp_f = [20.0, cpu_usage / 5.0];
+        let min = cmp_f.iter().fold(f32::NAN, |m, v| v.min(m));
+        let cmp_f = [1.0, min];
+        let max = cmp_f.iter().fold(f32::NAN, |m, v| v.max(m));
+        std::thread::sleep(std::time::Duration::from_millis((200.0 / max) as u64));
+
+        i = if i >= MAX_CAT_INDEX { 0 } else { i + 1 };
+
+        if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
+            proxy.send_event(RunCatTrayEvent::TrayIconEvent(i)).unwrap();
+        }
+    }
+}
+
+impl RunCatTray {
+    fn moditor_cpu_usage(&mut self) {
+        let mut sys = System::new();
+        let (cpu_tx, cpu_rx) = crossbeam_channel::unbounded();
+
+        tokio::task::spawn(async move {
+            send_cpu_usage(&mut sys, &cpu_tx);
+        });
+        tokio::task::spawn(async move {
+            modify_tray_icon(&cpu_rx);
+        });
     }
 }
 
