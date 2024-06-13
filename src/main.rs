@@ -28,7 +28,6 @@ pub(crate) struct RunCatTray {
     auto_fit_theme_menu_item: MenuItem,
     toggle_theme_menu_item: MenuItem,
     // menu_items: Vec<(MenuItem, fn(e: MenuEvent))>,
-    icon_path: (&'static str, &'static str),
     tary_icon: Option<TrayIcon>,
     curr_theme: dark_light::Mode,
     auto_fit_theme: bool,
@@ -90,7 +89,7 @@ impl Cat {
 }
 
 impl RunCatTray {
-    fn new(icon_path: (&'static str, &'static str)) -> Self {
+    fn new() -> Self {
         let auto_fit_theme = MenuItem::new("auto fit theme: true", true, None);
         let toggle_theme = MenuItem::new("toggle theme", false, None);
         let exit = MenuItem::new("exit", true, None);
@@ -103,7 +102,6 @@ impl RunCatTray {
             toggle_theme_menu_item: toggle_theme,
             exit_menu_item: exit,
             // menu_items: vec![],
-            icon_path,
             tary_icon: None,
 
             curr_theme: dark_light::detect(),
@@ -163,9 +161,9 @@ impl RunCatTray {
     fn on_theme_changed(&mut self) {
         if let Some(tray_icon) = self.tary_icon.as_mut() {
             let icon = if self.curr_theme == dark_light::Mode::Dark {
-                load_icon(std::path::Path::new(self.icon_path.0))
+                self.resource.light[0].clone()
             } else {
-                load_icon(std::path::Path::new(self.icon_path.1))
+                self.resource.dark[0].clone()
             };
             tray_icon.set_icon(Some(icon)).unwrap();
         }
@@ -284,16 +282,11 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
 }
 
 fn main() {
-    let path = (
-        concat!(env!("CARGO_MANIFEST_DIR"), "/src/cat/dark_cat_0.ico"),
-        concat!(env!("CARGO_MANIFEST_DIR"), "/src/cat/light_cat_0.ico"),
-    );
-
     let event_loop = EventLoop::<RunCatTrayEvent>::with_user_event()
         .build()
         .expect("can't start the event loop");
     *EVENT_LOOP_PROXY.lock() = Some(event_loop.create_proxy());
-    let mut app = RunCatTray::new(path);
+    let mut app = RunCatTray::new();
 
     event_loop.run_app(&mut app).unwrap();
 }
