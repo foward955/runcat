@@ -1,11 +1,14 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 #![windows_subsystem = "windows"]
 
-use std::sync::Arc;
+mod util;
+
+use util::load_icon;
 
 use crossbeam_channel::{Receiver, Sender};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
+use std::sync::Arc;
 use sysinfo::System;
 use tray_icon::{
     menu::{IsMenuItem, Menu, MenuEvent, MenuEventReceiver, MenuId, MenuItem},
@@ -119,35 +122,39 @@ impl RunCatTray {
         let mut i = 0;
 
         // cpu stats calculation thread
-        std::thread::spawn(move || loop {
-            std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
-            sys.refresh_cpu_usage();
-            let cpu_usage = sys.global_cpu_info().cpu_usage();
+        tokio::task::spawn(async move {
+            loop {
+                std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+                sys.refresh_cpu_usage();
+                let cpu_usage = sys.global_cpu_info().cpu_usage();
 
-            cpu_tx.send(cpu_usage).unwrap();
+                cpu_tx.send(cpu_usage).unwrap();
+            }
         });
 
-        std::thread::spawn(move || loop {
-            let cpu_usage = if let Ok(usage) = cpu_rx.try_recv() {
-                usage_cache = usage;
-                usage
-            } else {
-                usage_cache
-            };
+        tokio::task::spawn(async move {
+            loop {
+                let cpu_usage = if let Ok(usage) = cpu_rx.try_recv() {
+                    usage_cache = usage;
+                    usage
+                } else {
+                    usage_cache
+                };
 
-            let cmp_f = [20.0, cpu_usage / 5.0];
-            let min = cmp_f.iter().fold(f32::NAN, |m, v| v.min(m));
-            let cmp_f = [1.0, min];
-            let max = cmp_f.iter().fold(f32::NAN, |m, v| v.max(m));
-            std::thread::sleep(std::time::Duration::from_millis((200.0 / max) as u64));
-            i += 1;
+                let cmp_f = [20.0, cpu_usage / 5.0];
+                let min = cmp_f.iter().fold(f32::NAN, |m, v| v.min(m));
+                let cmp_f = [1.0, min];
+                let max = cmp_f.iter().fold(f32::NAN, |m, v| v.max(m));
+                std::thread::sleep(std::time::Duration::from_millis((200.0 / max) as u64));
+                i += 1;
 
-            if i > MAX_CAT_INDEX {
-                i = 0;
-            }
+                if i > MAX_CAT_INDEX {
+                    i = 0;
+                }
 
-            if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
-                proxy.send_event(RunCatTrayEvent::TrayIconEvent(i)).unwrap();
+                if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
+                    proxy.send_event(RunCatTrayEvent::TrayIconEvent(i)).unwrap();
+                }
             }
         });
     }
@@ -281,24 +288,15 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
     }
 }
 
-fn main() {
+#[tokio::main(worker_threads = 2)]
+async fn main() {
     let event_loop = EventLoop::<RunCatTrayEvent>::with_user_event()
         .build()
-        .expect("can't start the event loop");
+        .expect("Can't start the event loop");
     *EVENT_LOOP_PROXY.lock() = Some(event_loop.create_proxy());
     let mut app = RunCatTray::new();
 
-    event_loop.run_app(&mut app).unwrap();
-}
-
-fn load_icon(path: &std::path::Path) -> tray_icon::Icon {
-    let (icon_rgba, icon_width, icon_height) = {
-        let image = image::open(path)
-            .expect("Failed to open icon path")
-            .into_rgba8();
-        let (width, height) = image.dimensions();
-        let rgba = image.into_raw();
-        (rgba, width, height)
-    };
-    tray_icon::Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon")
+    event_loop
+        .run_app(&mut app)
+        .expect("Run cat app start failed.");
 }
