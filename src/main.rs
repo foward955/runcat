@@ -1,14 +1,22 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 #![windows_subsystem = "windows"]
 
+mod err;
 mod util;
 
-use util::load_icon;
+use err::RunCatTrayError;
+use util::{current_exe_dir, load_icon};
 
 use crossbeam_channel::{Receiver, Sender};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    env,
+    path::{self, Path},
+    sync::Arc,
+};
 use sysinfo::System;
 use tray_icon::{
     menu::{IsMenuItem, Menu, MenuEvent, MenuEventReceiver, MenuId, MenuItem},
@@ -33,73 +41,72 @@ pub(crate) struct RunCatTray {
     // menu_items: Vec<(MenuItem, fn(e: MenuEvent))>,
     tary_icon: Option<TrayIcon>,
     curr_theme: dark_light::Mode,
+
+    curr_icon_resource: Option<(String, RunIconResource)>,
+
     auto_fit_theme: bool,
 
-    resource: Cat,
+    icon_resource: HashMap<String, RunIconResourcePath>,
 }
 
 #[derive(Debug)]
 pub(crate) enum RunCatTrayEvent {
     TrayMenuEvent(MenuEvent),
     SystemThemeChanged(dark_light::Mode),
-    TrayIconEvent(usize),
+    CpuUsageRaiseTrayIconChangeEvent(usize),
 }
 
-pub struct Cat {
-    pub dark: Vec<Icon>,
-    pub light: Vec<Icon>,
-}
+impl RunIconResource {
+    fn load(
+        light_paths: &[String],
+        dark_paths: &[String],
+    ) -> Result<RunIconResource, RunCatTrayError> {
+        let base = current_exe_dir()?;
 
-const CATS_LIGHT: [&str; 5] = [
-    "/src/cat/light_cat_0.ico",
-    "/src/cat/light_cat_1.ico",
-    "/src/cat/light_cat_2.ico",
-    "/src/cat/light_cat_3.ico",
-    "/src/cat/light_cat_4.ico",
-];
+        let mut light_icon = vec![];
+        let mut dark_icon = vec![];
 
-const CATS_DARK: [&str; 5] = [
-    "/src/cat/dark_cat_0.ico",
-    "/src/cat/dark_cat_1.ico",
-    "/src/cat/dark_cat_2.ico",
-    "/src/cat/dark_cat_3.ico",
-    "/src/cat/dark_cat_4.ico",
-];
-
-impl Cat {
-    fn load() -> Cat {
-        Cat {
-            light: CATS_LIGHT
-                .map(|f| {
-                    load_icon(std::path::Path::new(&format!(
-                        "{}{}",
-                        env!("CARGO_MANIFEST_DIR"),
-                        f
-                    )))
-                })
-                .to_vec(),
-            dark: CATS_DARK
-                .map(|f| {
-                    load_icon(std::path::Path::new(&format!(
-                        "{}{}",
-                        env!("CARGO_MANIFEST_DIR"),
-                        f
-                    )))
-                })
-                .to_vec(),
+        for p in light_paths {
+            let icon = load_icon(base.join(p))?;
+            light_icon.push(icon);
         }
+
+        for p in dark_paths {
+            let icon = load_icon(base.join(p))?;
+            dark_icon.push(icon);
+        }
+
+        Ok(RunIconResource {
+            light: light_icon,
+            dark: dark_icon,
+        })
     }
 }
 
 impl RunCatTray {
-    fn new() -> Self {
+    fn new() -> Result<Self, RunCatTrayError> {
         let auto_fit_theme = MenuItem::new("auto fit theme: true", true, None);
         let toggle_theme = MenuItem::new("toggle theme", false, None);
         let exit = MenuItem::new("exit", true, None);
 
         let (cpu_tx, cpu_rx) = crossbeam_channel::unbounded::<f32>();
 
-        Self {
+        let mut icon_resource = load_resource()?;
+
+        let curr_icon_resource = if !icon_resource.is_empty() {
+            if let Some((k, v)) = icon_resource.remove_entry("cat") {
+                Some((
+                    k,
+                    RunIconResource::load(v.light.as_slice(), v.dark.as_slice())?,
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(Self {
             tray_menu: Menu::with_items(&[&auto_fit_theme, &toggle_theme, &exit]).unwrap(),
             auto_fit_theme_menu_item: auto_fit_theme,
             toggle_theme_menu_item: toggle_theme,
@@ -108,10 +115,13 @@ impl RunCatTray {
             tary_icon: None,
 
             curr_theme: dark_light::detect(),
+
+            curr_icon_resource,
+
             auto_fit_theme: true,
 
-            resource: Cat::load(),
-        }
+            icon_resource,
+        })
     }
 
     // fn add_menu_item(&mut self, item: MenuItem, handler: fn(e: MenuEvent)) {
@@ -122,12 +132,15 @@ impl RunCatTray {
 
     fn on_theme_changed(&mut self) {
         if let Some(tray_icon) = self.tary_icon.as_mut() {
-            let icon = if self.curr_theme == dark_light::Mode::Dark {
-                self.resource.light[0].clone()
-            } else {
-                self.resource.dark[0].clone()
-            };
-            tray_icon.set_icon(Some(icon)).unwrap();
+            if let Some(c) = self.curr_icon_resource.clone() {
+                let icon = if self.curr_theme == dark_light::Mode::Dark {
+                    c.1.dark[0].clone()
+                } else {
+                    c.1.light[0].clone()
+                };
+
+                tray_icon.set_icon(Some(icon)).unwrap();
+            }
         }
     }
 }
@@ -163,7 +176,9 @@ fn modify_tray_icon(cpu_rx: &Receiver<f32>) {
         i = if i >= MAX_CAT_INDEX { 0 } else { i + 1 };
 
         if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
-            proxy.send_event(RunCatTrayEvent::TrayIconEvent(i)).unwrap();
+            proxy
+                .send_event(RunCatTrayEvent::CpuUsageRaiseTrayIconChangeEvent(i))
+                .unwrap();
         }
     }
 }
@@ -263,14 +278,17 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
                     self.on_theme_changed();
                 }
             }
-            RunCatTrayEvent::TrayIconEvent(i) => {
+            RunCatTrayEvent::CpuUsageRaiseTrayIconChangeEvent(i) => {
                 if let Some(tray_icon) = self.tary_icon.as_mut() {
-                    let icon = if self.curr_theme == dark_light::Mode::Dark {
-                        self.resource.dark[i].clone()
-                    } else {
-                        self.resource.light[i].clone()
-                    };
-                    tray_icon.set_icon(Some(icon)).unwrap();
+                    if let Some(c) = self.curr_icon_resource.clone() {
+                        let icon = if self.curr_theme == dark_light::Mode::Dark {
+                            c.1.dark[i].clone()
+                        } else {
+                            c.1.light[i].clone()
+                        };
+
+                        tray_icon.set_icon(Some(icon)).unwrap();
+                    }
                 }
             }
         }
@@ -293,15 +311,48 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
     }
 }
 
+#[derive(Clone)]
+pub struct RunIconResource {
+    pub dark: Vec<Icon>,
+    pub light: Vec<Icon>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RunIconResourcePath {
+    dark: Vec<String>,
+    light: Vec<String>,
+}
+
+fn load_resource() -> Result<HashMap<String, RunIconResourcePath>, RunCatTrayError> {
+    let base = current_exe_dir()?.join("config/resource.toml");
+
+    let k = config::Config::builder()
+        .add_source(config::File::with_name(base.to_str().unwrap()))
+        .build()
+        .map_err(|e| {
+            println!("{:?}", e);
+
+            RunCatTrayError::FileError(
+                "File \"resource.toml\" is not found/invalid toml file. Please check.",
+            )
+        })?;
+
+    Ok(k.get::<HashMap<String, RunIconResourcePath>>("resource")
+        .map_err(|e| RunCatTrayError::FileError("Invalid resource file. Please check it out."))?)
+}
+
 #[tokio::main(worker_threads = 2)]
-async fn main() {
+async fn main() -> Result<(), RunCatTrayError> {
     let event_loop = EventLoop::<RunCatTrayEvent>::with_user_event()
         .build()
-        .expect("Can't start the event loop");
+        .map_err(|e| RunCatTrayError::RunAppFailed("Can't start the event loop"))?;
+
     *EVENT_LOOP_PROXY.lock() = Some(event_loop.create_proxy());
-    let mut app = RunCatTray::new();
+    let mut app = RunCatTray::new()?;
 
     event_loop
         .run_app(&mut app)
-        .expect("Run cat app start failed.");
+        .map_err(|e| RunCatTrayError::RunAppFailed("RunCat app start failed."))?;
+
+    Ok(())
 }

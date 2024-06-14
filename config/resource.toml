@@ -1,0 +1,14 @@
+[resource]
+cat = { dark = [
+    "resources/cat/dark_cat_0.ico",
+    "resources/cat/dark_cat_1.ico",
+    "resources/cat/dark_cat_2.ico",
+    "resources/cat/dark_cat_3.ico",
+    "resources/cat/dark_cat_4.ico",
+], light = [
+    "resources/cat/light_cat_0.ico",
+    "resources/cat/light_cat_1.ico",
+    "resources/cat/light_cat_2.ico",
+    "resources/cat/light_cat_3.ico",
+    "resources/cat/light_cat_4.ico",
+] }
