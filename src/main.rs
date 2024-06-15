@@ -17,7 +17,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 async fn main() -> Result<(), RunCatTrayError> {
     let event_loop = EventLoop::<RunCatTrayEvent>::with_user_event()
         .build()
-        .map_err(|_| RunCatTrayError::RunAppFailed("Can't start the event loop"))?;
+        .map_err(|_| RunCatTrayError::RunAppFailed("Can't start the event loop".to_string()))?;
 
     event_loop.set_control_flow(ControlFlow::Wait);
 
@@ -26,7 +26,7 @@ async fn main() -> Result<(), RunCatTrayError> {
 
     event_loop
         .run_app(&mut app)
-        .map_err(|_| RunCatTrayError::RunAppFailed("RunCat app start failed."))?;
+        .map_err(|_| RunCatTrayError::RunAppFailed("RunCat app start failed.".to_string()))?;
 
     Ok(())
 }

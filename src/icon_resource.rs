@@ -32,17 +32,22 @@ impl RunIconResourcePath {
                 .build()
                 .map_err(|_| {
                     RunCatTrayError::FileError(
-                        "File \"resource.toml\" is not found/invalid toml file. Please check.",
+                        "File \"resource.toml\" is not found/invalid toml file. Please check."
+                            .to_string(),
                     )
                 })?;
 
             Ok(config
                 .get::<HashMap<String, RunIconResourcePath>>("resource")
                 .map_err(|_| {
-                    RunCatTrayError::FileError("Invalid resource file. Please check it out.")
+                    RunCatTrayError::FileError(
+                        "Invalid resource file. Please check it out.".to_string(),
+                    )
                 })?)
         } else {
-            Err(RunCatTrayError::PathError("Can't load resource."))
+            Err(RunCatTrayError::PathError(
+                "Can't load resource.".to_string(),
+            ))
         }
     }
 }

@@ -1,8 +1,8 @@
 #[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) enum RunCatTrayError {
-    RunAppFailed(&'static str),
-    FileError(&'static str),
-    PathError(&'static str),
-    Other(&'static str),
+    RunAppFailed(String),
+    FileError(String),
+    PathError(String),
+    Other(String),
 }
