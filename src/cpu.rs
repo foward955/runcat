@@ -7,11 +7,11 @@ use crate::{
     icon_resource::MAX_RUN_ICON_INDEX,
 };
 
-pub(crate) fn send_cpu_usage(cpu_tx: &Sender<f32>) {
+pub(crate) async fn send_cpu_usage(cpu_tx: &Sender<f32>) {
     let mut sys = System::new();
 
     loop {
-        std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+        tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
         sys.refresh_cpu_usage();
         let cpu_usage = sys.global_cpu_info().cpu_usage();
 
@@ -19,7 +19,7 @@ pub(crate) fn send_cpu_usage(cpu_tx: &Sender<f32>) {
     }
 }
 
-pub(crate) fn send_icon_index(cpu_rx: &Receiver<f32>) {
+pub(crate) async fn send_icon_index(cpu_rx: &Receiver<f32>) {
     let mut i = 0;
     let mut usage_cache = 1.0;
 
@@ -38,7 +38,7 @@ pub(crate) fn send_icon_index(cpu_rx: &Receiver<f32>) {
 
         i = if i >= MAX_RUN_ICON_INDEX { 0 } else { i + 1 };
 
-        std::thread::sleep(std::time::Duration::from_millis((200.0 / max) as u64));
+        tokio::time::sleep(std::time::Duration::from_millis((200.0 / max) as u64)).await;
         if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
             proxy
                 .send_event(RunCatTrayEvent::ChangeIconIndexEvent(i))

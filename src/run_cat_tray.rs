@@ -111,10 +111,10 @@ impl RunCatTray {
         let (cpu_tx, cpu_rx) = crossbeam_channel::unbounded();
 
         tokio::task::spawn(async move {
-            send_cpu_usage(&cpu_tx);
+            send_cpu_usage(&cpu_tx).await;
         });
         tokio::task::spawn(async move {
-            send_icon_index(&cpu_rx);
+            send_icon_index(&cpu_rx).await;
         });
     }
 }
