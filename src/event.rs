@@ -11,5 +11,5 @@ pub(crate) static EVENT_LOOP_PROXY: Lazy<Arc<Mutex<Option<EventLoopProxy<RunCatT
 pub(crate) enum RunCatTrayEvent {
     TrayMenuEvent(MenuEvent),
     SystemThemeChanged(dark_light::Mode),
-    CpuUsageRaiseTrayIconChangeEvent(usize),
+    ChangeIconIndexEvent(usize),
 }

@@ -19,7 +19,7 @@ pub(crate) fn send_cpu_usage(cpu_tx: &Sender<f32>) {
     }
 }
 
-pub(crate) fn modify_tray_icon(cpu_rx: &Receiver<f32>) {
+pub(crate) fn send_icon_index(cpu_rx: &Receiver<f32>) {
     let mut i = 0;
     let mut usage_cache = 1.0;
 
@@ -35,13 +35,13 @@ pub(crate) fn modify_tray_icon(cpu_rx: &Receiver<f32>) {
         let min = cmp_f.iter().fold(f32::NAN, |m, v| v.min(m));
         let cmp_f = [1.0, min];
         let max = cmp_f.iter().fold(f32::NAN, |m, v| v.max(m));
-        std::thread::sleep(std::time::Duration::from_millis((200.0 / max) as u64));
 
         i = if i >= MAX_RUN_ICON_INDEX { 0 } else { i + 1 };
 
+        std::thread::sleep(std::time::Duration::from_millis((200.0 / max) as u64));
         if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
             proxy
-                .send_event(RunCatTrayEvent::CpuUsageRaiseTrayIconChangeEvent(i))
+                .send_event(RunCatTrayEvent::ChangeIconIndexEvent(i))
                 .unwrap();
         }
     }

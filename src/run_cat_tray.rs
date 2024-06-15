@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use tray_icon::{
-    menu::{Menu, MenuEvent, MenuItem},
+    menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, Submenu},
     TrayIcon, TrayIconBuilder,
 };
 use winit::application::ApplicationHandler;
 
 use crate::{
-    cpu::{modify_tray_icon, send_cpu_usage},
+    cpu::{send_cpu_usage, send_icon_index},
     err::RunCatTrayError,
     event::{RunCatTrayEvent, EVENT_LOOP_PROXY},
     icon_resource::{RunIconResource, RunIconResourcePath},
@@ -22,6 +22,7 @@ pub(crate) struct RunCatTray {
     exit_menu_item: MenuItem,
     auto_theme_menu_item: MenuItem,
     toggle_theme_menu_item: MenuItem,
+    characters_menu_item: Submenu,
     // menu_items: Vec<(MenuItem, fn(e: MenuEvent))>,
     tary_icon: Option<TrayIcon>,
     curr_theme: dark_light::Mode,
@@ -35,18 +36,29 @@ impl RunCatTray {
         let auto_fit_theme = MenuItem::new("Auto theme: true", true, None);
         let toggle_theme = MenuItem::new("Toggle theme", false, None);
         let exit = MenuItem::new("Exit", true, None);
+        let characters = Submenu::new("Characters", true);
+
+        let paths = RunIconResourcePath::load(current_exe_dir()?.join(RESOURCE_PATH))?;
+
+        paths.keys().for_each(|k| {
+            let checked = if k == DEFAULT_ICON_NAME { true } else { false };
+            let item = CheckMenuItem::with_id(k, k, !checked, checked, None);
+            characters.append(&item).unwrap();
+        });
 
         let mut tray = Self {
-            tray_menu: Menu::with_items(&[&auto_fit_theme, &toggle_theme, &exit]).unwrap(),
+            tray_menu: Menu::with_items(&[&characters, &auto_fit_theme, &toggle_theme, &exit])
+                .unwrap(),
             auto_theme_menu_item: auto_fit_theme,
             toggle_theme_menu_item: toggle_theme,
+            characters_menu_item: characters,
             exit_menu_item: exit,
             // menu_items: vec![],
             tary_icon: None,
             curr_theme: dark_light::detect(),
             curr_icon_resource: None,
             auto_theme: true,
-            icon_resource_paths: RunIconResourcePath::load(current_exe_dir()?.join(RESOURCE_PATH))?,
+            icon_resource_paths: paths,
         };
 
         tray.load_icon_by_name(DEFAULT_ICON_NAME)?;
@@ -55,9 +67,9 @@ impl RunCatTray {
     }
 
     fn load_icon_by_name(&mut self, name: &str) -> Result<(), RunCatTrayError> {
-        self.curr_icon_resource = if let Some((k, v)) = self.icon_resource_paths.remove_entry(name)
+        self.curr_icon_resource = if let Some((k, v)) = self.icon_resource_paths.get_key_value(name)
         {
-            Some((k, RunIconResource::load(&v.light, &v.dark)?))
+            Some((k.to_string(), RunIconResource::load(&v.light, &v.dark)?))
         } else {
             None
         };
@@ -102,7 +114,7 @@ impl RunCatTray {
             send_cpu_usage(&cpu_tx);
         });
         tokio::task::spawn(async move {
-            modify_tray_icon(&cpu_rx);
+            send_icon_index(&cpu_rx);
         });
     }
 }
@@ -160,6 +172,19 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
                         .set_text(format!("Auto theme: {}", self.auto_theme));
 
                     self.on_theme_changed();
+                } else {
+                    for item in self.characters_menu_item.items() {
+                        if let Some(el) = item.as_check_menuitem() {
+                            if ev.id() != el.id() {
+                                el.set_checked(false);
+                                el.set_enabled(true);
+                            } else {
+                                el.set_checked(true);
+                                el.set_enabled(false);
+                                self.load_icon_by_name(ev.id().0.as_ref()).unwrap();
+                            }
+                        }
+                    }
                 }
                 // else {
                 //     if let Some(find) = self.menu_items.iter().find(|x| *x.0.id() == ev.id) {
@@ -173,7 +198,7 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
                     self.on_theme_changed();
                 }
             }
-            RunCatTrayEvent::CpuUsageRaiseTrayIconChangeEvent(i) => {
+            RunCatTrayEvent::ChangeIconIndexEvent(i) => {
                 if let Some(tray_icon) = self.tary_icon.as_mut() {
                     if let Some((_, resource)) = self.curr_icon_resource.as_ref() {
                         let icon = if self.curr_theme == dark_light::Mode::Dark {
