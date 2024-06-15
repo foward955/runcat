@@ -13,30 +13,16 @@ cat = { dark = [
     "resources/cat/light_cat_4.ico",
 ] }
 
-horse = { dark = [
-    "resources/horse/dark_horse_0.ico",
-    "resources/horse/dark_horse_1.ico",
-    "resources/horse/dark_horse_2.ico",
-    "resources/horse/dark_horse_3.ico",
-    "resources/horse/dark_horse_4.ico",
+dance = { dark = [
+    "resources/dance/dark_dance_0.ico",
+    "resources/dance/dark_dance_1.ico",
+    "resources/dance/dark_dance_2.ico",
+    "resources/dance/dark_dance_3.ico",
+    "resources/dance/dark_dance_4.ico",
 ], light = [
-    "resources/horse/light_horse_0.ico",
-    "resources/horse/light_horse_1.ico",
-    "resources/horse/light_horse_2.ico",
-    "resources/horse/light_horse_3.ico",
-    "resources/horse/light_horse_4.ico",
-] }
-
-parrot = { dark = [
-    "resources/parrot/dark_parrot_0.ico",
-    "resources/parrot/dark_parrot_1.ico",
-    "resources/parrot/dark_parrot_2.ico",
-    "resources/parrot/dark_parrot_3.ico",
-    "resources/parrot/dark_parrot_4.ico",
-], light = [
-    "resources/parrot/light_parrot_0.ico",
-    "resources/parrot/light_parrot_1.ico",
-    "resources/parrot/light_parrot_2.ico",
-    "resources/parrot/light_parrot_3.ico",
-    "resources/parrot/light_parrot_4.ico",
+    "resources/dance/light_dance_0.ico",
+    "resources/dance/light_dance_1.ico",
+    "resources/dance/light_dance_2.ico",
+    "resources/dance/light_dance_3.ico",
+    "resources/dance/light_dance_4.ico",
 ] }

@@ -181,7 +181,10 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
                             } else {
                                 el.set_checked(true);
                                 el.set_enabled(false);
-                                self.load_icon_by_name(ev.id().0.as_ref()).unwrap();
+
+                                if self.load_icon_by_name(ev.id().0.as_ref()).is_err() {
+                                    // error
+                                }
                             }
                         }
                     }
