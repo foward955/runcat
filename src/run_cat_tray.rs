@@ -24,7 +24,7 @@ pub(crate) struct RunCatTray {
     toggle_theme_menu_item: MenuItem,
     characters_menu_item: Submenu,
     // menu_items: Vec<(MenuItem, fn(e: MenuEvent))>,
-    tary_icon: Option<TrayIcon>,
+    tray_icon: Option<TrayIcon>,
     curr_theme: dark_light::Mode,
     auto_theme: bool,
     curr_icon_resource: Option<(String, RunIconResource)>,
@@ -41,7 +41,7 @@ impl RunCatTray {
         let paths = RunIconResourcePath::load(current_exe_dir()?.join(RESOURCE_PATH))?;
 
         paths.keys().for_each(|k| {
-            let checked = if k == DEFAULT_ICON_NAME { true } else { false };
+            let checked = k == DEFAULT_ICON_NAME;
             let item = CheckMenuItem::with_id(k, k, !checked, checked, None);
             characters.append(&item).unwrap();
         });
@@ -54,7 +54,7 @@ impl RunCatTray {
             characters_menu_item: characters,
             exit_menu_item: exit,
             // menu_items: vec![],
-            tary_icon: None,
+            tray_icon: None,
             curr_theme: dark_light::detect(),
             curr_icon_resource: None,
             auto_theme: true,
@@ -84,7 +84,7 @@ impl RunCatTray {
     // fn change_tray_icon(&self, i: usize) {}
 
     fn on_theme_changed(&mut self) {
-        if let Some(tray_icon) = self.tary_icon.as_mut() {
+        if let Some(tray_icon) = self.tray_icon.as_mut() {
             if let Some((_, resource)) = self.curr_icon_resource.as_ref() {
                 let icon = if self.curr_theme == dark_light::Mode::Dark {
                     resource.dark[0].clone()
@@ -107,7 +107,7 @@ impl RunCatTray {
 }
 
 impl RunCatTray {
-    fn moditor_cpu_usage(&mut self) {
+    fn monitor_cpu_usage(&mut self) {
         let (cpu_tx, cpu_rx) = crossbeam_channel::unbounded();
 
         tokio::task::spawn(async move {
@@ -120,30 +120,38 @@ impl RunCatTray {
 }
 
 impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
+    fn new_events(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        _cause: winit::event::StartCause,
+    ) {
+        let mode = dark_light::detect();
+
+        if self.curr_theme != mode {
+            if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
+                proxy
+                    .send_event(RunCatTrayEvent::SystemThemeChanged(mode))
+                    .unwrap();
+            }
+        }
+    }
+
     fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
         // for item in self.menu_items.iter() {
         //     self.tray_menu.prepend(&item.0).unwrap();
         // }
-        self.tary_icon = Some(
+        self.tray_icon = Some(
             TrayIconBuilder::new()
                 .with_menu(Box::new(self.tray_menu.clone()))
-                .with_tooltip("runcat")
-                .with_title("runcat")
+                .with_tooltip("RunCat")
+                .with_title("RunCat")
                 .build()
                 .unwrap(),
         );
 
         self.send_menu_event();
         self.on_theme_changed();
-        self.moditor_cpu_usage();
-    }
-
-    fn window_event(
-        &mut self,
-        _event_loop: &winit::event_loop::ActiveEventLoop,
-        _window_id: winit::window::WindowId,
-        _event: winit::event::WindowEvent,
-    ) {
+        self.monitor_cpu_usage();
     }
 
     fn user_event(
@@ -202,7 +210,7 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
                 }
             }
             RunCatTrayEvent::ChangeIconIndexEvent(i) => {
-                if let Some(tray_icon) = self.tary_icon.as_mut() {
+                if let Some(tray_icon) = self.tray_icon.as_mut() {
                     if let Some((_, resource)) = self.curr_icon_resource.as_ref() {
                         let icon = if self.curr_theme == dark_light::Mode::Dark {
                             resource.dark[i].clone()
@@ -217,19 +225,11 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
         }
     }
 
-    fn new_events(
+    fn window_event(
         &mut self,
         _event_loop: &winit::event_loop::ActiveEventLoop,
-        _cause: winit::event::StartCause,
+        _window_id: winit::window::WindowId,
+        _event: winit::event::WindowEvent,
     ) {
-        let mode = dark_light::detect();
-
-        if self.curr_theme != mode {
-            if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
-                proxy
-                    .send_event(RunCatTrayEvent::SystemThemeChanged(mode))
-                    .unwrap();
-            }
-        }
     }
 }

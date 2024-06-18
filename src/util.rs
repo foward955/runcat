@@ -4,7 +4,7 @@ use tray_icon::Icon;
 
 use crate::err::RunCatTrayError;
 
-pub fn load_icon(path: std::path::PathBuf) -> Result<Icon, RunCatTrayError> {
+pub fn load_icon(path: PathBuf) -> Result<Icon, RunCatTrayError> {
     let image = image::open(path.clone())
         .map_err(|e| {
             let err = format!("Failed to open icon path: {:?}, error: {:?}", path, e);
