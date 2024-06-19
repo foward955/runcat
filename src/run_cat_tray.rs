@@ -4,6 +4,8 @@ use tray_icon::{
     TrayIcon, TrayIconBuilder,
 };
 use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::window::{WindowAttributes, WindowLevel};
 
 use crate::{
     cpu::{send_cpu_usage, send_icon_index},
@@ -19,6 +21,7 @@ pub(crate) const DEFAULT_ICON_NAME: &str = "cat";
 
 pub(crate) struct RunCatTray {
     tray_menu: Menu,
+    editor_menu_item: MenuItem,
     exit_menu_item: MenuItem,
     auto_theme_menu_item: MenuItem,
     toggle_theme_menu_item: MenuItem,
@@ -29,11 +32,14 @@ pub(crate) struct RunCatTray {
     auto_theme: bool,
     curr_icon_resource: Option<(String, RunIconResource)>,
     icon_resource_paths: HashMap<String, RunIconResourcePath>,
+
+    editor: Option<winit::window::Window>
 }
 
 impl RunCatTray {
     pub fn new() -> Result<Self, RunCatTrayError> {
         let auto_fit_theme = MenuItem::new("Auto theme: true", true, None);
+        let open_editor_menu_item = MenuItem::new("Open editor", true, None);
         let toggle_theme = MenuItem::new("Toggle theme", false, None);
         let exit = MenuItem::new("Exit", true, None);
         let characters = Submenu::new("Characters", true);
@@ -47,9 +53,10 @@ impl RunCatTray {
         });
 
         let mut tray = Self {
-            tray_menu: Menu::with_items(&[&characters, &auto_fit_theme, &toggle_theme, &exit])
+            tray_menu: Menu::with_items(&[&open_editor_menu_item, &characters, &auto_fit_theme, &toggle_theme, &exit])
                 .unwrap(),
             auto_theme_menu_item: auto_fit_theme,
+            editor_menu_item: open_editor_menu_item,
             toggle_theme_menu_item: toggle_theme,
             characters_menu_item: characters,
             exit_menu_item: exit,
@@ -59,6 +66,7 @@ impl RunCatTray {
             curr_icon_resource: None,
             auto_theme: true,
             icon_resource_paths: paths,
+            editor: None
         };
 
         tray.load_icon_by_name(DEFAULT_ICON_NAME)?;
@@ -180,6 +188,10 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
                         .set_text(format!("Auto theme: {}", self.auto_theme));
 
                     self.on_theme_changed();
+                } else if ev.id == self.editor_menu_item.id() {
+                    let attr = WindowAttributes::default();
+                    let w = event_loop.create_window(attr.with_window_level(WindowLevel::AlwaysOnTop)).unwrap();
+                    self.editor = Some(w);
                 } else {
                     for item in self.characters_menu_item.items() {
                         if let Some(el) = item.as_check_menuitem() {
@@ -229,7 +241,40 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
         &mut self,
         _event_loop: &winit::event_loop::ActiveEventLoop,
         _window_id: winit::window::WindowId,
-        _event: winit::event::WindowEvent,
+        _event: WindowEvent,
     ) {
+        match _event {
+            WindowEvent::ActivationTokenDone { .. } => {}
+            WindowEvent::Resized(_) => {}
+            WindowEvent::Moved(_) => {}
+            WindowEvent::CloseRequested => {
+                // set editor to None, then Window will be dropped/closed.
+                self.editor = None;
+            }
+            WindowEvent::Destroyed => {}
+            WindowEvent::DroppedFile(_) => {}
+            WindowEvent::HoveredFile(_) => {}
+            WindowEvent::HoveredFileCancelled => {}
+            WindowEvent::Focused(_) => {}
+            WindowEvent::KeyboardInput { .. } => {}
+            WindowEvent::ModifiersChanged(_) => {}
+            WindowEvent::Ime(_) => {}
+            WindowEvent::CursorMoved { .. } => {}
+            WindowEvent::CursorEntered { .. } => {}
+            WindowEvent::CursorLeft { .. } => {}
+            WindowEvent::MouseWheel { .. } => {}
+            WindowEvent::MouseInput { .. } => {}
+            WindowEvent::PinchGesture { .. } => {}
+            WindowEvent::PanGesture { .. } => {}
+            WindowEvent::DoubleTapGesture { .. } => {}
+            WindowEvent::RotationGesture { .. } => {}
+            WindowEvent::TouchpadPressure { .. } => {}
+            WindowEvent::AxisMotion { .. } => {}
+            WindowEvent::Touch(_) => {}
+            WindowEvent::ScaleFactorChanged { .. } => {}
+            WindowEvent::ThemeChanged(_) => {}
+            WindowEvent::Occluded(_) => {}
+            WindowEvent::RedrawRequested => {}
+        }
     }
 }

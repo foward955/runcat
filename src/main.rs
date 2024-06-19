@@ -6,6 +6,7 @@ mod event;
 mod icon_resource;
 mod run_cat_tray;
 mod util;
+mod gif;
 
 use err::RunCatTrayError;
 use event::{RunCatTrayEvent, EVENT_LOOP_PROXY};
