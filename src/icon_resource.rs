@@ -11,21 +11,21 @@ use crate::{
 pub(crate) const MAX_RUN_ICON_INDEX: usize = 4;
 
 #[derive(Clone)]
-pub struct RunIconResource {
+pub struct IconResource {
     pub dark: Vec<Icon>,
     pub light: Vec<Icon>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RunIconResourcePath {
+pub struct IconResourcePath {
     pub dark: Vec<String>,
     pub light: Vec<String>,
 }
 
-impl RunIconResourcePath {
+impl IconResourcePath {
     pub(crate) fn load(
         path: PathBuf,
-    ) -> Result<HashMap<String, RunIconResourcePath>, RunCatTrayError> {
+    ) -> Result<HashMap<String, IconResourcePath>, RunCatTrayError> {
         if let Some(path) = path.to_str() {
             let config = config::Config::builder()
                 .add_source(config::File::with_name(path))
@@ -38,7 +38,7 @@ impl RunIconResourcePath {
                 })?;
 
             Ok(config
-                .get::<HashMap<String, RunIconResourcePath>>("resource")
+                .get::<HashMap<String, IconResourcePath>>("resource")
                 .map_err(|_| {
                     RunCatTrayError::FileError(
                         "Invalid resource file. Please check it out.".to_string(),
@@ -52,11 +52,11 @@ impl RunIconResourcePath {
     }
 }
 
-impl RunIconResource {
+impl IconResource {
     pub fn load(
         light_paths: &[String],
         dark_paths: &[String],
-    ) -> Result<RunIconResource, RunCatTrayError> {
+    ) -> Result<IconResource, RunCatTrayError> {
         let base = current_exe_dir()?;
 
         let mut light_icon = vec![];
@@ -72,7 +72,7 @@ impl RunIconResource {
             dark_icon.push(icon);
         }
 
-        Ok(RunIconResource {
+        Ok(IconResource {
             light: light_icon,
             dark: dark_icon,
         })

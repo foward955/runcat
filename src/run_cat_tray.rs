@@ -11,7 +11,7 @@ use crate::{
     cpu::{send_cpu_usage, send_icon_index},
     err::RunCatTrayError,
     event::{RunCatTrayEvent, EVENT_LOOP_PROXY},
-    icon_resource::{RunIconResource, RunIconResourcePath},
+    icon_resource::{IconResource, IconResourcePath},
     util::current_exe_dir,
 };
 
@@ -28,8 +28,8 @@ pub(crate) struct RunCatTray {
     tray_icon: Option<TrayIcon>,
     curr_theme: dark_light::Mode,
     auto_theme: bool,
-    curr_icon_resource: Option<(String, RunIconResource)>,
-    icon_resource_paths: HashMap<String, RunIconResourcePath>,
+    curr_icon_resource: Option<(String, IconResource)>,
+    icon_resource_paths: HashMap<String, IconResourcePath>,
 
     editor: Option<winit::window::Window>,
 }
@@ -47,7 +47,7 @@ impl RunCatTray {
         let characters = Submenu::new("Characters", true);
         let exit = MenuItem::new("Exit", true, None);
 
-        let paths = RunIconResourcePath::load(current_exe_dir()?.join(RESOURCE_PATH))?;
+        let paths = IconResourcePath::load(current_exe_dir()?.join(RESOURCE_PATH))?;
 
         paths.keys().for_each(|k| {
             let checked = k == DEFAULT_ICON_NAME;
@@ -58,15 +58,20 @@ impl RunCatTray {
         let mut tray = Self {
             tray_menu: Menu::with_items(&[&open_editor_menu_item, &characters, &theme, &exit])
                 .unwrap(),
+
             editor_menu_item: open_editor_menu_item,
-            characters_menu_item: characters,
-            theme_menu_item: theme,
-            exit_menu_item: exit,
-            tray_icon: None,
-            curr_theme: dark_light::detect(),
-            curr_icon_resource: None,
+
             auto_theme: true,
+            curr_theme: dark_light::detect(),
+            theme_menu_item: theme,
+
+            exit_menu_item: exit,
+            characters_menu_item: characters,
+
+            tray_icon: None,
+            curr_icon_resource: None,
             icon_resource_paths: paths,
+
             editor: None,
         };
 
@@ -78,7 +83,7 @@ impl RunCatTray {
     fn load_icon_by_name(&mut self, name: &str) -> Result<(), RunCatTrayError> {
         self.curr_icon_resource = if let Some((k, v)) = self.icon_resource_paths.get_key_value(name)
         {
-            Some((k.to_string(), RunIconResource::load(&v.light, &v.dark)?))
+            Some((k.to_string(), IconResource::load(&v.light, &v.dark)?))
         } else {
             None
         };
@@ -244,12 +249,9 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
         _window_id: winit::window::WindowId,
         _event: WindowEvent,
     ) {
-        match _event {
-            WindowEvent::CloseRequested => {
-                // set editor to None, then Window will be dropped/closed.
-                self.editor = None;
-            }
-            _ => {}
+        if _event == WindowEvent::CloseRequested {
+            // set editor to None, then Window will be dropped/closed.
+            self.editor = None;
         }
     }
 }
