@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use tray_icon::{
-    menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, Submenu},
+    menu::{CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, Submenu},
     TrayIcon, TrayIconBuilder,
 };
 use winit::application::ApplicationHandler;
@@ -23,26 +23,29 @@ pub(crate) struct RunCatTray {
     tray_menu: Menu,
     editor_menu_item: MenuItem,
     exit_menu_item: MenuItem,
-    auto_theme_menu_item: MenuItem,
-    toggle_theme_menu_item: MenuItem,
     characters_menu_item: Submenu,
-    // menu_items: Vec<(MenuItem, fn(e: MenuEvent))>,
+    theme_menu_item: Submenu,
     tray_icon: Option<TrayIcon>,
     curr_theme: dark_light::Mode,
     auto_theme: bool,
     curr_icon_resource: Option<(String, RunIconResource)>,
     icon_resource_paths: HashMap<String, RunIconResourcePath>,
 
-    editor: Option<winit::window::Window>
+    editor: Option<winit::window::Window>,
 }
 
 impl RunCatTray {
     pub fn new() -> Result<Self, RunCatTrayError> {
-        let auto_fit_theme = MenuItem::new("Auto theme: true", true, None);
         let open_editor_menu_item = MenuItem::new("Open editor", true, None);
-        let toggle_theme = MenuItem::new("Toggle theme", false, None);
-        let exit = MenuItem::new("Exit", true, None);
+
+        let auto = CheckMenuItem::with_id("AutoTheme", "Auto", false, true, None);
+        let dark = CheckMenuItem::with_id("DarkTheme", "Dark", true, false, None);
+        let light = CheckMenuItem::with_id("LightTheme", "Light", true, false, None);
+        let theme =
+            Submenu::with_id_and_items("Theme", "Theme", true, &[&auto, &dark, &light]).unwrap();
+
         let characters = Submenu::new("Characters", true);
+        let exit = MenuItem::new("Exit", true, None);
 
         let paths = RunIconResourcePath::load(current_exe_dir()?.join(RESOURCE_PATH))?;
 
@@ -53,20 +56,18 @@ impl RunCatTray {
         });
 
         let mut tray = Self {
-            tray_menu: Menu::with_items(&[&open_editor_menu_item, &characters, &auto_fit_theme, &toggle_theme, &exit])
+            tray_menu: Menu::with_items(&[&open_editor_menu_item, &characters, &theme, &exit])
                 .unwrap(),
-            auto_theme_menu_item: auto_fit_theme,
             editor_menu_item: open_editor_menu_item,
-            toggle_theme_menu_item: toggle_theme,
             characters_menu_item: characters,
+            theme_menu_item: theme,
             exit_menu_item: exit,
-            // menu_items: vec![],
             tray_icon: None,
             curr_theme: dark_light::detect(),
             curr_icon_resource: None,
             auto_theme: true,
             icon_resource_paths: paths,
-            editor: None
+            editor: None,
         };
 
         tray.load_icon_by_name(DEFAULT_ICON_NAME)?;
@@ -84,12 +85,6 @@ impl RunCatTray {
 
         Ok(())
     }
-
-    // fn add_menu_item(&mut self, item: MenuItem, handler: fn(e: MenuEvent)) {
-    //     self.menu_items.push((item, handler));
-    // }
-
-    // fn change_tray_icon(&self, i: usize) {}
 
     fn on_theme_changed(&mut self) {
         if let Some(tray_icon) = self.tray_icon.as_mut() {
@@ -145,9 +140,6 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
     }
 
     fn resumed(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
-        // for item in self.menu_items.iter() {
-        //     self.tray_menu.prepend(&item.0).unwrap();
-        // }
         self.tray_icon = Some(
             TrayIconBuilder::new()
                 .with_menu(Box::new(self.tray_menu.clone()))
@@ -171,28 +163,42 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
             RunCatTrayEvent::TrayMenuEvent(ev) => {
                 if ev.id == self.exit_menu_item.id() {
                     event_loop.exit();
-                } else if ev.id == self.toggle_theme_menu_item.id() {
-                    self.curr_theme = if self.curr_theme == dark_light::Mode::Dark {
-                        dark_light::Mode::Light
-                    } else {
-                        dark_light::Mode::Dark
-                    };
-
-                    self.on_theme_changed();
-                } else if ev.id == self.auto_theme_menu_item.id() {
-                    self.auto_theme = !self.auto_theme;
-
-                    self.toggle_theme_menu_item.set_enabled(!self.auto_theme);
-
-                    self.auto_theme_menu_item
-                        .set_text(format!("Auto theme: {}", self.auto_theme));
-
-                    self.on_theme_changed();
                 } else if ev.id == self.editor_menu_item.id() {
-                    let attr = WindowAttributes::default();
-                    let w = event_loop.create_window(attr.with_window_level(WindowLevel::AlwaysOnTop)).unwrap();
-                    self.editor = Some(w);
+                    self.editor = Some(
+                        event_loop
+                            .create_window(
+                                WindowAttributes::default()
+                                    .with_window_level(WindowLevel::AlwaysOnTop),
+                            )
+                            .unwrap(),
+                    );
                 } else {
+                    for item in self.theme_menu_item.items() {
+                        if let Some(el) = item.as_check_menuitem() {
+                            if ev.id() == el.id() {
+                                el.set_checked(true);
+                                el.set_enabled(false);
+                            } else {
+                                el.set_checked(false);
+                                el.set_enabled(true);
+                            }
+                        }
+                    }
+
+                    if ev.id() == &MenuId::new("AutoTheme") {
+                        self.auto_theme = true;
+                        self.curr_theme = dark_light::detect();
+                    } else {
+                        self.auto_theme = false;
+                        self.curr_theme = if ev.id() == &MenuId::new("DarkTheme") {
+                            dark_light::Mode::Dark
+                        } else {
+                            dark_light::Mode::Light
+                        };
+                    }
+
+                    self.on_theme_changed();
+
                     for item in self.characters_menu_item.items() {
                         if let Some(el) = item.as_check_menuitem() {
                             if ev.id() != el.id() {
@@ -209,15 +215,10 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
                         }
                     }
                 }
-                // else {
-                //     if let Some(find) = self.menu_items.iter().find(|x| *x.0.id() == ev.id) {
-                //         find.1(ev);
-                //     }
-                // }
             }
-            RunCatTrayEvent::SystemThemeChanged(m) => {
+            RunCatTrayEvent::SystemThemeChanged(mode) => {
                 if self.auto_theme {
-                    self.curr_theme = m;
+                    self.curr_theme = mode;
                     self.on_theme_changed();
                 }
             }
@@ -244,37 +245,11 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
         _event: WindowEvent,
     ) {
         match _event {
-            WindowEvent::ActivationTokenDone { .. } => {}
-            WindowEvent::Resized(_) => {}
-            WindowEvent::Moved(_) => {}
             WindowEvent::CloseRequested => {
                 // set editor to None, then Window will be dropped/closed.
                 self.editor = None;
             }
-            WindowEvent::Destroyed => {}
-            WindowEvent::DroppedFile(_) => {}
-            WindowEvent::HoveredFile(_) => {}
-            WindowEvent::HoveredFileCancelled => {}
-            WindowEvent::Focused(_) => {}
-            WindowEvent::KeyboardInput { .. } => {}
-            WindowEvent::ModifiersChanged(_) => {}
-            WindowEvent::Ime(_) => {}
-            WindowEvent::CursorMoved { .. } => {}
-            WindowEvent::CursorEntered { .. } => {}
-            WindowEvent::CursorLeft { .. } => {}
-            WindowEvent::MouseWheel { .. } => {}
-            WindowEvent::MouseInput { .. } => {}
-            WindowEvent::PinchGesture { .. } => {}
-            WindowEvent::PanGesture { .. } => {}
-            WindowEvent::DoubleTapGesture { .. } => {}
-            WindowEvent::RotationGesture { .. } => {}
-            WindowEvent::TouchpadPressure { .. } => {}
-            WindowEvent::AxisMotion { .. } => {}
-            WindowEvent::Touch(_) => {}
-            WindowEvent::ScaleFactorChanged { .. } => {}
-            WindowEvent::ThemeChanged(_) => {}
-            WindowEvent::Occluded(_) => {}
-            WindowEvent::RedrawRequested => {}
+            _ => {}
         }
     }
 }
