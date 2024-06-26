@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 use tray_icon::{
-    menu::{CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, Submenu},
+    menu::{CheckMenuItem, Menu, MenuId, MenuItem, Submenu},
     TrayIcon, TrayIconBuilder,
 };
-use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::window::{WindowAttributes, WindowLevel};
+use winit::{application::ApplicationHandler, event_loop::EventLoopProxy};
 
 use crate::{
     cpu::monitor_cpu_usage,
     err::RunCatTrayError,
-    event::{RunCatTrayEvent, EVENT_LOOP_PROXY},
+    event::{send_menu_event, RunCatTrayEvent, EVENT_LOOP_PROXY},
     icon_resource::{IconResource, IconResourcePath},
     util::current_exe_dir,
 };
@@ -92,7 +92,7 @@ impl RunCatTray {
     }
 
     fn on_theme_changed(&mut self) {
-        if let Some(tray_icon) = self.tray_icon.as_mut() {
+        if let Some(tray_icon) = self.tray_icon.as_ref() {
             if let Some((_, resource)) = self.curr_icon_resource.as_ref() {
                 let icon = if self.curr_theme == dark_light::Mode::Dark {
                     resource.dark[0].clone()
@@ -105,12 +105,10 @@ impl RunCatTray {
         }
     }
 
-    fn send_menu_event(&self) {
-        MenuEvent::set_event_handler(Some(move |f| {
-            if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
-                proxy.send_event(RunCatTrayEvent::TrayMenuEvent(f)).unwrap();
-            }
-        }));
+    pub(crate) fn with_event_loop_proxy(f: impl FnOnce(&EventLoopProxy<RunCatTrayEvent>)) {
+        if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
+            f(proxy);
+        }
     }
 }
 
@@ -123,11 +121,11 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
         let mode = dark_light::detect();
 
         if self.curr_theme != mode {
-            if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
+            RunCatTray::with_event_loop_proxy(|proxy| {
                 proxy
                     .send_event(RunCatTrayEvent::SystemThemeChanged(mode))
                     .unwrap();
-            }
+            });
         }
     }
 
@@ -141,9 +139,9 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
                 .unwrap(),
         );
 
-        self.send_menu_event();
         self.on_theme_changed();
 
+        send_menu_event();
         monitor_cpu_usage();
     }
 
