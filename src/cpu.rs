@@ -7,6 +7,17 @@ use crate::{
     icon_resource::MAX_RUN_ICON_INDEX,
 };
 
+pub(crate) fn monitor_cpu_usage() {
+    let (cpu_tx, cpu_rx) = crossbeam_channel::unbounded();
+
+    tokio::task::spawn(async move {
+        send_cpu_usage(&cpu_tx).await;
+    });
+    tokio::task::spawn(async move {
+        send_icon_index(&cpu_rx).await;
+    });
+}
+
 pub(crate) async fn send_cpu_usage(cpu_tx: &Sender<f32>) {
     let mut sys = System::new();
 

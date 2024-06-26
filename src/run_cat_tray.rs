@@ -8,7 +8,7 @@ use winit::event::WindowEvent;
 use winit::window::{WindowAttributes, WindowLevel};
 
 use crate::{
-    cpu::{send_cpu_usage, send_icon_index},
+    cpu::monitor_cpu_usage,
     err::RunCatTrayError,
     event::{RunCatTrayEvent, EVENT_LOOP_PROXY},
     icon_resource::{IconResource, IconResourcePath},
@@ -114,19 +114,6 @@ impl RunCatTray {
     }
 }
 
-impl RunCatTray {
-    fn monitor_cpu_usage(&mut self) {
-        let (cpu_tx, cpu_rx) = crossbeam_channel::unbounded();
-
-        tokio::task::spawn(async move {
-            send_cpu_usage(&cpu_tx).await;
-        });
-        tokio::task::spawn(async move {
-            send_icon_index(&cpu_rx).await;
-        });
-    }
-}
-
 impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
     fn new_events(
         &mut self,
@@ -156,7 +143,8 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
 
         self.send_menu_event();
         self.on_theme_changed();
-        self.monitor_cpu_usage();
+
+        monitor_cpu_usage();
     }
 
     fn user_event(
