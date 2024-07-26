@@ -32,24 +32,20 @@ pub(crate) async fn send_cpu_usage(cpu_tx: &Sender<f32>) {
 
 pub(crate) async fn send_icon_index(cpu_rx: &Receiver<f32>) {
     let mut i = 0;
-    let mut usage_cache = 1.0;
+    let mut cpu_usage = 1.0;
 
     loop {
-        let cpu_usage = if let Ok(usage) = cpu_rx.try_recv() {
-            usage_cache = usage;
-            usage
-        } else {
-            usage_cache
-        };
+        if let Ok(usage) = cpu_rx.try_recv() {
+            cpu_usage = usage;
+        }
 
-        let cmp_f = [20.0, cpu_usage / 5.0];
-        let min = cmp_f.iter().fold(f32::NAN, |m, v| v.min(m));
-        let cmp_f = [1.0, min];
-        let max = cmp_f.iter().fold(f32::NAN, |m, v| v.max(m));
+        let min = 20.0_f32.min(cpu_usage / 5.0);
+        let max = 1.0_f32.max(min);
 
         i = if i >= MAX_RUN_ICON_INDEX { 0 } else { i + 1 };
 
         tokio::time::sleep(std::time::Duration::from_millis((200.0 / max) as u64)).await;
+
         if let Some(proxy) = EVENT_LOOP_PROXY.lock().as_ref() {
             proxy
                 .send_event(RunCatTrayEvent::ChangeIconIndexEvent(i))
