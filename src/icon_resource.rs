@@ -62,6 +62,13 @@ impl IconResource {
         let mut light_icon = vec![];
         let mut dark_icon = vec![];
 
+        if light_paths.len() != dark_paths.len() && light_paths.len() != MAX_RUN_ICON_INDEX {
+            return Err(RunCatTrayError::Other(format!(
+                "light/dark icon must greater than or equal to {}.",
+                MAX_RUN_ICON_INDEX
+            )));
+        }
+
         for p in light_paths {
             let icon = load_icon(base.join(p))?;
             light_icon.push(icon);
