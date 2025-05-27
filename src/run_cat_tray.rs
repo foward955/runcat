@@ -62,7 +62,8 @@ impl RunCatTray {
             editor_menu_item: open_editor_menu_item,
 
             auto_theme: true,
-            curr_theme: dark_light::detect(),
+            curr_theme: dark_light::detect()
+                .map_err(|err| RunCatTrayError::Other(err.to_string()))?,
             theme_menu_item: theme,
 
             exit_menu_item: exit,
@@ -118,7 +119,7 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
         _event_loop: &winit::event_loop::ActiveEventLoop,
         _cause: winit::event::StartCause,
     ) {
-        let mode = dark_light::detect();
+        let mode = dark_light::detect().unwrap();
 
         if self.curr_theme != mode {
             RunCatTray::with_event_loop_proxy(|proxy| {
@@ -178,7 +179,8 @@ impl ApplicationHandler<RunCatTrayEvent> for RunCatTray {
 
                     if ev.id() == &MenuId::new("AutoTheme") {
                         self.auto_theme = true;
-                        self.curr_theme = dark_light::detect();
+                        self.curr_theme = dark_light::detect().unwrap();
+                        self.on_theme_changed();
                     } else {
                         self.auto_theme = false;
                         self.curr_theme = if ev.id() == &MenuId::new("DarkTheme") {

@@ -24,7 +24,7 @@ pub(crate) async fn send_cpu_usage(cpu_tx: &Sender<f32>) {
     loop {
         tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
         sys.refresh_cpu_usage();
-        let cpu_usage = sys.global_cpu_info().cpu_usage();
+        let cpu_usage = sys.global_cpu_usage();
 
         cpu_tx.send(cpu_usage).unwrap();
     }
